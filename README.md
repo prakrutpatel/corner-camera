@@ -1,7 +1,7 @@
 
 CornerCam (Turning Corners into Cameras) - Python Reimplementation
 
-This package is a best-effort translation of the MIT CornerCam MATLAB code.
+This package is a best effort translation of the MIT CornerCam MATLAB code.
 
 Dependencies (suggested):
   - numpy
@@ -11,12 +11,8 @@ Dependencies (suggested):
   - imageio
 
 Typical usage:
-
-  from cornercam_py.runner.test_corner import test_corner
-  from cornercam_py.example_params import indoor_loc1
-
-  datafolder = r"C:\Users\admin\Downloads\example_videos\example_videos"
-  test_corner(datafolder, indoor_loc1, debug=True)
+  Change "datafolder" in test_corner.py
+  python test_corner.py
 
 Notes:
   - Homography and corner selection use matplotlib ginput.
