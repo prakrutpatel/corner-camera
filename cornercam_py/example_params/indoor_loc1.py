@@ -9,3 +9,5 @@ names = [
     "loc1_one_person_walking",
     "loc1_two_people_walking",
 ]
+
+run_name = "indoor_loc1"

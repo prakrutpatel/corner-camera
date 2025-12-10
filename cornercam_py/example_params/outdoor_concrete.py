@@ -10,3 +10,4 @@ names = [
     "concrete_one_person_walking_randomly",
     "concrete_two_people_walking_randomly"
 ]
+run_name = "outdoor_concrete"

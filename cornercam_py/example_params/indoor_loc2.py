@@ -8,3 +8,4 @@ input_type = "video"
 names = [
     "loc2_one_person_walking",
 ]
+run_name = "indoor_loc2"

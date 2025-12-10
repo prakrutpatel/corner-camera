@@ -14,6 +14,8 @@ from ..recon.mean_image import save_mean_image
 from ..recon.noise import estimate_frame_noise
 from ..recon.video_recon import video_recon
 from ..preprocess.frame import preprocess_frame
+from ..recon.metrics import print_recon_metrics, append_metrics_csv
+from ..recon.temporal import temporal_denoise
 
 
 def _param_string(params: dict, name: str) -> str:
@@ -38,6 +40,32 @@ def _param_string(params: dict, name: str) -> str:
             pieces.append(f"r{int(rs.min())}-{int(rs.max())}-{int(rs.size)}")
     return "_".join(pieces)
 
+
+def _config_tag(params: dict, name: str) -> str:
+    """
+    Compact, self-identifying name.
+    """
+    noise = params.get("noise_preset", "unknown-noise")
+    temp = params.get("temporal_preset", "unknown-temp")
+
+    # add key temporal hyperparams in tag for easy comparison
+    temp_method = params.get("temporal_method", "none")
+    if temp_method == "gaussian":
+        temp = f"{temp}_s{params.get('temporal_sigma', 1.0)}_w{params.get('temporal_window', 7)}"
+    elif temp_method == "median":
+        temp = f"{temp}_w{params.get('temporal_window', 7)}"
+    elif temp_method == "savgol":
+        temp = f"{temp}_w{params.get('temporal_window', 7)}_p{params.get('temporal_savgol_poly', 2)}"
+    elif temp_method == "ewma":
+        temp = f"{temp}_a{params.get('temporal_ewma_alpha', 0.25)}"
+
+    # keep sampling info minimal
+    sampling = params.get("sampling", "rays")
+    corner_idx = int(params.get("corner_idx", 1))
+    rect = int(bool(params.get("rectify", False)))
+    down = int(params.get("downlevs", 0))
+
+    return f"{name}_corner{corner_idx}_{sampling}__noise-{noise}__temp-{temp}"
 
 def test_run(
     datafolder: str,
@@ -85,11 +113,11 @@ def test_run(
     params["corner_data"] = save_corner_data(cornerfile, ncorners, input_type=input_type, overwrite=False)
 
     # Visualize stored annotation points (raw)
-    if debug:
-        if params.get("rectify", False) and "homography" in params:
-            show_homography_points(params["homography"])
-        if "corner_data" in params:
-            show_corner_points(params["corner_data"])
+    # if debug:
+    #     if params.get("rectify", False) and "homography" in params:
+    #         show_homography_points(params["homography"])
+    #     if "corner_data" in params:
+    #         show_corner_points(params["corner_data"])
     
     # Set sampling locations + crop ranges
     params = set_obs_xy_locs(params)
@@ -112,11 +140,11 @@ def test_run(
         ], dtype=np.float64)
 
         calimg_p = preprocess_frame(calimg, params)
-        plt.figure()
-        plt.imshow(calimg_p.astype(np.uint8))
-        plt.scatter([c_proc[0]], [c_proc[1]], s=60)
-        plt.title("Preprocessed calibration frame + corner (debug)")
-        plt.show()
+        # plt.figure()
+        # plt.imshow(calimg_p.astype(np.uint8))
+        # plt.scatter([c_proc[0]], [c_proc[1]], s=60)
+        # plt.title("Preprocessed calibration frame + corner (debug)")
+        # plt.show()
 
     # Run reconstruction for each video
     for name in names:
@@ -136,34 +164,85 @@ def test_run(
 
         # Mean/variance file (needed for offline noise estimate)
         # MATLAB uses saveMeanImage -> saveMeanVideoFrame
-        params["mean_datafile"] = save_mean_image(srcfile, input_type=input_type, overwrite=True)
+        params["mean_datafile"] = save_mean_image(srcfile, input_type=input_type, overwrite=False)
 
         # Estimate noise and set lambda
         noise = estimate_frame_noise(params)
         params["lambda"] = float(noise)
 
-        paramstr = _param_string(params, name)
-        outfile = os.path.join(resfolder, f"out_{paramstr}.npz")
-        imfile = os.path.join(resfolder, f"im_{paramstr}.png")
+        tag = _config_tag(params, name)
+        outfile = os.path.join(resfolder, f"out_{tag}.npz")
+        imfile = os.path.join(resfolder, f"im_{tag}.png")
 
         if os.path.exists(outfile):
             print(f"{outfile} already exists")
 
         outframes, params = video_recon(srcfile, params)
+        
+        baseline_metrics = None
+        if params.get("metrics_debug", True):
+            baseline_metrics = print_recon_metrics(
+                tag=f"{name} | pre-temporal",
+                outframes=outframes,
+                extra={"lambda_used": float(params.get("lambda", 0.0))}
+            )
+
+            # log compact row
+            if params.get("metrics_log_path"):
+                append_metrics_csv(
+                    params["metrics_log_path"],
+                    expname=expname,
+                    stage="pre-temporal",
+                    noise_preset=str(params.get("noise_preset", "baseline")),
+                    temporal_preset=str(params.get("temporal_preset", "none")),
+                    lambda_used=float(params.get("lambda", 0.0)),
+                    metrics=baseline_metrics,
+                )
+
+        
+        outframes = temporal_denoise(outframes, params)
+        
+        if params.get("metrics_debug", True):
+            post_metrics = print_recon_metrics(
+                tag=f"{name} | post-temporal ({params.get('temporal_method','none')})",
+                outframes=outframes,
+                baseline=baseline_metrics,
+                extra={"lambda_used": float(params.get("lambda", 0.0))}
+            )
+
+            if params.get("metrics_log_path"):
+                append_metrics_csv(
+                    params["metrics_log_path"],
+                    expname=expname,
+                    stage=f"post-temporal({params.get('temporal_method','none')})",
+                    noise_preset=str(params.get("noise_preset", "baseline")),
+                    temporal_preset=str(params.get("temporal_preset", "none")),
+                    lambda_used=float(params.get("lambda", 0.0)),
+                    metrics=post_metrics,
+                )
+        
+        
+        
+        if debug and params.get("temporal_denoise", False):
+            print(
+                f"[DEBUG] temporal_method={params.get('temporal_method')}, "
+                f"sigma={params.get('temporal_sigma', None)}, "
+                f"window={params.get('temporal_window', None)}, "
+                f"alpha={params.get('temporal_ewma_alpha', None)}"
+            )
 
         # Match MATLAB visualization scaling:
         # scaled = (outframes + 0.05)/0.1;
         scaled = (outframes + 0.05) / 0.1
         scaled = np.clip(scaled, 0.0, 1.0)
 
-        if debug:
-            plt.figure()
-            # show first channel if multi-chan
-            plt.imshow(scaled[:, :, 0] if scaled.ndim == 3 else scaled, aspect="auto")
-            plt.title(f"Scaled reconstruction: {name}")
-            plt.xlabel("Hidden angle index")
-            plt.ylabel("Time index")
-            plt.show()
+        plt.figure()
+        # show first channel if multi-chan
+        plt.imshow(scaled[:, :, 0] if scaled.ndim == 3 else scaled, aspect="auto")
+        plt.title(f"Scaled reconstruction: {name}")
+        plt.xlabel("Hidden angle index")
+        plt.ylabel("Time index")
+        plt.savefig(os.path.join(resfolder, f"scaled_im_{tag}.png"))
 
         # Save image
         # imageio expects HxW or HxWxC
