@@ -136,7 +136,7 @@ def test_run(
 
         # Mean/variance file (needed for offline noise estimate)
         # MATLAB uses saveMeanImage -> saveMeanVideoFrame
-        params["mean_datafile"] = save_mean_image(srcfile, input_type=input_type, overwrite=False)
+        params["mean_datafile"] = save_mean_image(srcfile, input_type=input_type, overwrite=True)
 
         # Estimate noise and set lambda
         noise = estimate_frame_noise(params)

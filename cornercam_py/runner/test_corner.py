@@ -15,6 +15,7 @@ def test_corner(
     start_time: float = 2.0,
     end_time: float = 22.0,
     step: int = 6,
+    noise_model: str = "baseline"
 ):
     '''
     Python analogue of test_corner.m.
@@ -28,6 +29,7 @@ def test_corner(
     vidtype = exp_module.vidtype
     input_type = exp_module.input_type
     names = list(exp_module.names)
+    
 
     # default params matching MATLAB test_corner.m
     params = {}
@@ -46,6 +48,9 @@ def test_corner(
     params["corner_r"] = 0
 
     params["nsamples"] = 200
+    
+
+    
 
     # rays
     rstep = 8
@@ -57,7 +62,33 @@ def test_corner(
 
     # grid
     params["grid_r"] = 60
-
+    
+    def apply_noise_preset(params, preset: str):
+        if preset == "baseline":
+            params["noise_model"] = "legacy"
+            params["noise_use_obs_points"] = False
+            params["noise_time_adaptive"] = False
+        elif preset == "robust_global":
+            params["noise_model"] = "mad"
+            params["noise_use_obs_points"] = False
+            params["noise_time_adaptive"] = False
+        elif preset == "robust_obs":
+            params["noise_model"] = "mad"
+            params["noise_use_obs_points"] = True
+            params["noise_time_adaptive"] = False
+        elif preset == "weighted_obs":
+            params["noise_model"] = "weighted_obs"
+            params["noise_use_obs_points"] = True
+            params["noise_time_adaptive"] = False
+            params["noise_weighted_eps"] = 1e-6
+        elif preset == "time_adapt_obs":
+            params["noise_model"] = "mad"
+            params["noise_use_obs_points"] = True
+            params["noise_time_adaptive"] = True
+            params["noise_time_samples"] = 8
+        else:
+            raise ValueError(preset)
+    apply_noise_preset(params, noise_model)
     # Run
     return test_run(
         datafolder=datafolder,
