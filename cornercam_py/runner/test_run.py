@@ -243,7 +243,8 @@ def test_run(
         plt.xlabel("Hidden angle index")
         plt.ylabel("Time index")
         plt.savefig(os.path.join(resfolder, f"scaled_im_{tag}.png"))
-
+        plt.close()
+        
         # Save image
         # imageio expects HxW or HxWxC
         # outframes is (T, nsamples, C)

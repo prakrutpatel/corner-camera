@@ -11,7 +11,7 @@ datafolder = r"C:\Users\admin\Downloads\example_videos\example_videos"
 
 sweep_corner(
     datafolder=datafolder,
-    exp_module=indoor_loc1,
+    exp_module=outdoor_concrete,
     out_root=r"Y:\results",
     debug=False,          # set True if you want windows popping up
     sampling="rays",

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 from .test_run import test_run
 
 
 def apply_noise_preset(params, preset: str):
-    # store name for filenames
+    # store name for filenames/metrics
     params["noise_preset"] = preset
 
     if preset == "baseline":
@@ -40,7 +39,7 @@ def apply_noise_preset(params, preset: str):
 
 
 def apply_temporal_preset(params, preset: str):
-    # store name for filenames
+    # store name for filenames/metrics
     params["temporal_preset"] = preset
 
     if preset in (None, "none", "off"):
@@ -68,6 +67,34 @@ def apply_temporal_preset(params, preset: str):
         params["temporal_method"] = "ewma"
         params["temporal_ewma_alpha"] = 0.25
 
+    # -------------------------
+    # Adaptive temporal presets
+    # -------------------------
+    elif preset == "adaptive_gaussian":
+        params["temporal_method"] = "adaptive"
+        params["temporal_adapt_base"] = "gaussian"
+        params["temporal_sigma"] = 1.0
+        params["temporal_adapt_strength"] = 1.25
+
+    elif preset == "adaptive_median":
+        params["temporal_method"] = "adaptive"
+        params["temporal_adapt_base"] = "median"
+        params["temporal_window"] = 7
+        params["temporal_adapt_strength"] = 1.25
+
+    elif preset == "adaptive_savgol":
+        params["temporal_method"] = "adaptive"
+        params["temporal_adapt_base"] = "savgol"
+        params["temporal_window"] = 7
+        params["temporal_savgol_poly"] = 2
+        params["temporal_adapt_strength"] = 1.25
+
+    elif preset == "adaptive_ewma":
+        params["temporal_method"] = "adaptive"
+        params["temporal_adapt_base"] = "ewma"
+        params["temporal_ewma_alpha"] = 0.25
+        params["temporal_adapt_strength"] = 1.25
+
     else:
         raise ValueError(preset)
 
@@ -82,7 +109,9 @@ def test_corner(
     end_time: float = 22.0,
     step: int = 6,
     noise_model: str = "baseline",
-    temporal_model: str = "gaussian",
+    temporal_preset: str = "gaussian",
+    # backward-compat alias (optional)
+    temporal_model: str | None = None,
     resfolder: str | None = None,
     metrics_log_path: str | None = None,
 ):
@@ -115,7 +144,7 @@ def test_corner(
     params["nsamples"] = 200
 
     params["metrics_debug"] = True
-    
+
     if metrics_log_path:
         params["metrics_log_path"] = metrics_log_path
 
@@ -132,7 +161,10 @@ def test_corner(
 
     # Apply presets
     apply_noise_preset(params, noise_model)
-    apply_temporal_preset(params, temporal_model)
+
+    # If caller used old arg name, honor it
+    effective_temporal = temporal_model if temporal_model is not None else temporal_preset
+    apply_temporal_preset(params, effective_temporal)
 
     # Run
     return test_run(
